@@ -1,0 +1,80 @@
+name: Process V2Ray Subscriptions
+
+on:
+  push:
+    paths:
+      - 'subs.txt'
+  pull_request:
+    paths:
+      - 'subs.txt'
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  process-subscriptions:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Check if should run based on commit message
+      id: should-run
+      if: github.event_name == 'push'
+      run: |
+        if echo "${{ github.event.head_commit.message }}" | grep -qi "run"; then
+          echo "should-run=true" >> $GITHUB_OUTPUT
+          echo "Commit message contains 'run' - workflow will continue"
+        else
+          echo "should-run=false" >> $GITHUB_OUTPUT
+          echo "Commit message does not contain 'run' - workflow will continue anyway due to file changes"
+        fi
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests
+        
+    - name: Process subscriptions
+      run: |
+        python process_subscriptions.py
+        
+    - name: Check if sum.txt was created
+      run: |
+        if [ ! -f "sum.txt" ]; then
+          echo "Error: sum.txt was not created!"
+          exit 1
+        fi
+        
+        # Count lines in sum.txt
+        line_count=$(wc -l < sum.txt)
+        echo "Created sum.txt with $line_count configurations"
+        
+    - name: Commit and push changes
+      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Check if there are changes to commit
+        if git diff --quiet; then
+          echo "No changes to commit"
+        else
+          git add sum.txt
+          git commit -m "Update sum.txt with latest configurations [skip ci]"
+          git push
+        fi
+        
+    - name: Upload sum.txt as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: v2ray-configurations
+        path: sum.txt
+        retention-days: 30
