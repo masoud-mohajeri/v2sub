@@ -2,8 +2,6 @@ name: Process V2Ray Subscriptions
 
 on:
   push:
-    paths:
-      - 'subs.txt'
   pull_request:
     paths:
       - 'subs.txt'
@@ -15,22 +13,15 @@ on:
 jobs:
   process-subscriptions:
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'schedule' || 
+      github.event_name == 'workflow_dispatch' || 
+      github.event_name == 'pull_request' || 
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, 'run') || contains(github.event.head_commit.message, 'RUN')))
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
-    - name: Check if should run based on commit message
-      id: should-run
-      if: github.event_name == 'push'
-      run: |
-        if echo "${{ github.event.head_commit.message }}" | grep -qi "run"; then
-          echo "should-run=true" >> $GITHUB_OUTPUT
-          echo "Commit message contains 'run' - workflow will continue"
-        else
-          echo "should-run=false" >> $GITHUB_OUTPUT
-          echo "Commit message does not contain 'run' - workflow will continue anyway due to file changes"
-        fi
       
     - name: Set up Python
       uses: actions/setup-python@v4
